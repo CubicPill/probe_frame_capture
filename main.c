@@ -96,8 +96,6 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     /*
      * unused parameters
      */
-    (VOID)(param);
-    (VOID)(pkt_data);
 
     /* convert the timestamp to readable format */
     local_tv_sec = header->ts.tv_sec;
@@ -105,5 +103,6 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     strftime( timestr, sizeof timestr, "%H:%M:%S", ltime);
 
     printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
+    printf("%s\n",param);
 
 }
