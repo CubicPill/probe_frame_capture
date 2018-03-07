@@ -7,6 +7,7 @@
 #endif
 
 #include "pcap.h"
+#include <string.h>
 
 /* prototype of the packet handler */
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
@@ -79,6 +80,18 @@ int main() {
     return 0;
 }
 
+int format_mac(const u_char *data, char *result) {
+    for (int i = 0; i < 5; ++i) {
+        sprintf(result + 3 * i, "%02X-", data[i]);
+    }
+    sprintf(result + 15, "%02X\0", data[5]);
+    return 1;
+}
+
+
+int parse_802_11_frame(const u_char *data) {
+    
+}
 
 /* Callback function invoked by libpcap for every incoming packet */
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
@@ -86,9 +99,7 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     char timestr[16];
     time_t local_tv_sec;
 
-    /*
-     * unused parameters
-     */
+
 
     /* convert the timestamp to readable format */
     local_tv_sec = header->ts.tv_sec;
@@ -97,17 +108,27 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
     printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
     printf("##########\n");
-    for (int i = 0; i < header->len; ++i) {
+    /*for (int i = 0; i < header->len; ++i) {
         printf("%02X ", pkt_data[i]);
         if ((i + 1) % 16 == 0) {
             printf("\n");
         }
     }
-    if(header->len>12){
-        printf("Dst:\n");
-        printf("Src:\n");
+     printf("\n\n");
+     */
 
-    }
+    char *dst_mac = malloc(18);
+
+    char *src_mac = malloc(18);
+    format_mac(pkt_data, dst_mac);
+    format_mac(pkt_data + 6, src_mac);
+    printf("Dst:%s\n", dst_mac);
+    printf("Src:%s\n", src_mac);
+    free(dst_mac);
+
+    free(src_mac);
+
+
     printf("\n##########\n\n");
 
 }
