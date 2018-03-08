@@ -89,8 +89,13 @@ int format_mac(const u_char *data, char *result) {
 }
 
 
-int parse_802_11_frame(const u_char *data) {
-    
+int filter_802_11_frame(const u_char *data) {
+    u_char frame_control = data[0x20];
+    if ((frame_control >> 2) == 0x10) {
+        // it's 010000xx in binary, type=0x0, subtype=0x4
+        return 1;
+    }
+    return 0;
 }
 
 /* Callback function invoked by libpcap for every incoming packet */
@@ -115,7 +120,7 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
         }
     }
      printf("\n\n");
-     */
+
 
     char *dst_mac = malloc(18);
 
@@ -127,7 +132,11 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     free(dst_mac);
 
     free(src_mac);
+*/
+    if (filter_802_11_frame(pkt_data)) {
 
+        printf("OK");
+    }
 
     printf("\n##########\n\n");
 
