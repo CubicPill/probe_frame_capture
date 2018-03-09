@@ -89,13 +89,17 @@ int format_mac(const u_char *data, char *result) {
 }
 
 
-int filter_802_11_frame(const u_char *data) {
+int filter_802_11_probe_frame(const u_char *data) {
     u_char frame_control = data[0x20];
     if ((frame_control >> 2) == 0x10) {
         // it's 010000xx in binary, type=0x0, subtype=0x4
         return 1;
     }
     return 0;
+}
+
+int parse_frame(const u_char *data) {
+    
 }
 
 /* Callback function invoked by libpcap for every incoming packet */
@@ -113,27 +117,21 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
     printf("%s,%.6d len:%d\n", timestr, header->ts.tv_usec, header->len);
     printf("##########\n");
-    /*for (int i = 0; i < header->len; ++i) {
-        printf("%02X ", pkt_data[i]);
-        if ((i + 1) % 16 == 0) {
-            printf("\n");
-        }
-    }
-     printf("\n\n");
+    /*
 
 
-    char *dst_mac = malloc(18);
+     char *dst_mac = malloc(18);
 
-    char *src_mac = malloc(18);
-    format_mac(pkt_data, dst_mac);
-    format_mac(pkt_data + 6, src_mac);
-    printf("Dst:%s\n", dst_mac);
-    printf("Src:%s\n", src_mac);
-    free(dst_mac);
+     char *src_mac = malloc(18);
+     format_mac(pkt_data, dst_mac);
+     format_mac(pkt_data + 6, src_mac);
+     printf("Dst:%s\n", dst_mac);
+     printf("Src:%s\n", src_mac);
+     free(dst_mac);
 
-    free(src_mac);
-*/
-    if (filter_802_11_frame(pkt_data)) {
+     free(src_mac);
+ */
+    if (filter_802_11_probe_frame(pkt_data)) {
 
         printf("OK");
     }
