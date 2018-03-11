@@ -8,6 +8,8 @@
 
 #include "pcap.h"
 #include "capture.h"
+#include <stdlib.h>
+#include <time.h>
 
 /* prototype of the packet handler */
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
@@ -62,7 +64,7 @@ int main() {
                                    1000,            // read timeout
                                    errbuf            // error buffer
     )) == NULL) {
-        fprintf(stderr, "\nUnable to open the adapter. %s is not supported by WinPcap\n", d->name);
+        fprintf(stderr, "\nUnable to open the adapter. %s is not supported by Libpcap / WinPcap\n", d->name);
         /* Free the device list */
         pcap_freealldevs(alldevs);
         return -1;
@@ -104,6 +106,10 @@ int parse_frame(const u_char *data) {
 
 /* Callback function invoked by libpcap for every incoming packet */
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
+     if (!filter_802_11_probe_frame(pkt_data)) {return;}
+
+        printf("Probe request captured\n");
+    
     struct tm *ltime;
     char timestr[16];
     time_t local_tv_sec;
@@ -131,11 +137,8 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
      free(src_mac);
  */
-    if (filter_802_11_probe_frame(pkt_data)) {
-
-        printf("OK");
-    }
+     
 
     printf("\n##########\n\n");
-
+     
 }
