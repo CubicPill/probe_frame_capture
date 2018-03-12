@@ -1,21 +1,44 @@
-#ifdef _MSC_VER
-/*
- * we do not want the warnings about the old deprecated and unsecure CRT functions
- * since these examples can be compiled under *nix as well
- */
-#define _CRT_SECURE_NO_WARNINGS
-#endif
-
 #include "pcap.h"
 #include "capture.h"
 
+#ifdef _WIN32
+
+#error "Windows is not supported"
+#endif
+
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
+#include<errno.h>
 
-/* prototype of the packet handler */
+struct sockaddr_in server_addr;
+int sock;
+char whitelist_mac[18];
 
-int main() {
+int main(int argc, char *const argv[]) {
+    memset(whitelist_mac, 0, 18);
+    if (argc < 3) {
+        fprintf(stderr, "No server address or port specified!");
+        exit(1);
+    }
+    if (argc == 4) {
+        strncpy(whitelist_mac, argv[3], 18);
+    }
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons((unsigned short) strtol(argv[2], NULL, 10));
+    if (inet_pton(AF_INET, argv[1], &server_addr.sin_addr) <= 0) {
+        printf("inet_pton error for %s\n", argv[1]);
+        exit(1);
+    }
+
+
     pcap_if_t *alldevs;
     pcap_if_t *d;
     int inum;
@@ -37,7 +60,7 @@ int main() {
     }
 
     if (i == 0) {
-        printf("\nNo interfaces found! Make sure WinPcap is installed.\n");
+        printf("\nNo interfaces found! Make sure Libpcap / WinPcap is installed.\n");
         return -1;
     }
 
@@ -63,7 +86,6 @@ int main() {
     printf("\nlistening on %s...\n", d->description);
 
     pcap_freealldevs(alldevs);
-
     pcap_loop(adhandle, 0, packet_handler, NULL);
 
     pcap_close(adhandle);
@@ -93,28 +115,15 @@ int parse_frame(const u_char *data, struct frame_info *f) {
     memcpy(f->dst_mac, data + 0x24, 6);
     f->ssi_signal_dBm = (signed char) -(~(data[0x16] - data[0x17]) + 1);
     return 1;
-
 }
 
 
-void packet_handler(const u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
+void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
     if (!filter_802_11_probe_frame(pkt_data)) {
         return;
     }
 
-    (VOID) param;
-    struct tm *ltime;
-    char timestr[16];
-    time_t local_tv_sec;
 
-
-
-    /* convert the timestamp to readable format */
-    local_tv_sec = header->ts.tv_sec;
-    ltime = localtime(&local_tv_sec);
-    strftime(timestr, sizeof timestr, "%H:%M:%S", ltime);
-
-    printf("%s,%.6li len:%d\n", timestr, header->ts.tv_usec, header->len);
     struct frame_info f;
     time(&f.timestamp);
     parse_frame(pkt_data, &f);
@@ -122,8 +131,19 @@ void packet_handler(const u_char *param, const struct pcap_pkthdr *header, const
 
     char src_mac[18];
     format_mac(f.src_mac, src_mac);
+    if (strlen(whitelist_mac) == 17) {
+        if (strcmp(src_mac, whitelist_mac) != 0) {
+            printf("Packet from %s, filtered\n", src_mac);
+            return;
+        }
+    }
     format_mac(f.dst_mac, dst_mac);
-    printf("Src:%s\nDst:%s\nSignal:%ddBm\n\n", src_mac, dst_mac, f.ssi_signal_dBm);
+    printf("Timestamp:%ld\nSrc:%s\nDst:%s\nSignal:%ddBm\n\n", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
+    char send_buffer[1024];
+    memset(send_buffer, 0, 1024);
+    sprintf(send_buffer, "ts:%ld\nsrc:%s\ndst:%s\nsignal:%d", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
+    sendto(sock, send_buffer, strlen(send_buffer), 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
 
 
 }
+
