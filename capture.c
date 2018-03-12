@@ -11,9 +11,9 @@
 
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 
 /* prototype of the packet handler */
-void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data);
 
 int main() {
     pcap_if_t *alldevs;
@@ -70,11 +70,11 @@ int main() {
     return 0;
 }
 
-int format_mac(const u_char *data, char *result) {
-    for (int i = 0; i < 5; ++i) {
-        sprintf(result + 3 * i, "%02X-", data[i]);
+int format_mac(const unsigned char *mac, char *result) {
+    for (int i = 0; i < 6; ++i) {
+        sprintf(result + 3 * i, "%02X-", mac[i]);
     }
-    sprintf(result + 15, "%02X\0", data[5]);
+    result[17] = '\0';
     return 1;
 }
 
@@ -88,24 +88,21 @@ int filter_802_11_probe_frame(const u_char *data) {
     return 0;
 }
 
-int parse_frame(const u_char *data) {
-    char src_mac[18];
-    char dst_mac[18];
-    format_mac(data + 0x2a, src_mac);
-    format_mac(data + 0x24, dst_mac);
-    printf("Src:%s Dst: %s\n", src_mac, dst_mac);
-    printf("Signal: -%d\n", 0xff - (data[0x16] - data[0x17]) + 1);
+int parse_frame(const u_char *data, struct frame_info *f) {
+    memcpy(f->src_mac, data + 0x2a, 6);
+    memcpy(f->dst_mac, data + 0x24, 6);
+    f->ssi_signal_dBm = (signed char) -(~(data[0x16] - data[0x17]) + 1);
     return 1;
 
 }
 
 
-void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
+void packet_handler(const u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
     if (!filter_802_11_probe_frame(pkt_data)) {
         return;
     }
 
-
+    (VOID) param;
     struct tm *ltime;
     char timestr[16];
     time_t local_tv_sec;
@@ -118,21 +115,15 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     strftime(timestr, sizeof timestr, "%H:%M:%S", ltime);
 
     printf("%s,%.6li len:%d\n", timestr, header->ts.tv_usec, header->len);
-    parse_frame(pkt_data);
-    /*
+    struct frame_info f;
+    time(&f.timestamp);
+    parse_frame(pkt_data, &f);
+    char dst_mac[18];
 
-
-     char *dst_mac = malloc(18);
-
-     char *src_mac = malloc(18);
-     format_mac(pkt_data, dst_mac);
-     format_mac(pkt_data + 6, src_mac);
-     printf("Dst:%s\n", dst_mac);
-     printf("Src:%s\n", src_mac);
-     free(dst_mac);
-
-     free(src_mac);
- */
+    char src_mac[18];
+    format_mac(f.src_mac, src_mac);
+    format_mac(f.dst_mac, dst_mac);
+    printf("Src:%s\nDst:%s\nSignal:%ddBm\n\n", src_mac, dst_mac, f.ssi_signal_dBm);
 
 
 }
