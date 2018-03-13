@@ -3,8 +3,7 @@ project(probe_frame_capture)
 
 set(CMAKE_C_STANDARD 11)
 
-include_directories(./include)
+include_directories(./src/headers)
 
-link_directories(lib/arm64)
 link_libraries(pcap)
-add_executable(probe_frame_capture capture.c)
+add_executable(probe_frame_capture src/capture.c)
