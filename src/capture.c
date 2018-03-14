@@ -7,8 +7,8 @@
 #endif
 
 #include<sys/types.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -52,7 +52,7 @@ int main(int argc, char *const argv[]) {
 
 
     if ((adhandle = pcap_open_live(interface, 65536, 1, 1000, errbuf)) == NULL) {
-        fprintf(stderr, "\nUnable to open the adapter %s \n", interface);
+        fprintf(stderr, "Unable to open the adapter %s \n", interface);
         return -1;
     }
 
