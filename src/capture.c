@@ -25,6 +25,7 @@ int main(int argc, char *const argv[]) {
     memset(whitelist_mac, 0, 18);
     if (argc < 4) {
         fprintf(stderr, "No interface, server address or port specified!\n");
+        printf("Usage: %s <interface name> <server> <port> <(Optional) MAC>\n", argv[0]);
         exit(1);
     }
     if (argc == 5) {
