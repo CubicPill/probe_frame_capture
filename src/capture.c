@@ -1,10 +1,5 @@
-#include "pcap.h"
+#include <pcap.h>
 #include "capture.h"
-
-#ifdef _WIN32
-
-#error "Windows is not supported"
-#endif
 
 #include<sys/types.h>
 #include <sys/socket.h>
