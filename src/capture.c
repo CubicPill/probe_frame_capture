@@ -119,6 +119,7 @@ int parse_frame(const u_char *data, struct frame_info *f) {
     memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
     memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
     f->ssi_signal_dBm = (signed char) -(~(data[0x16] - data[0x17]) + 1);
+    //FIXME: This is hard coded, should read the list of flags and determine where is ssi signal
     return 1;
 }
 

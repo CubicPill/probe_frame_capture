@@ -18,7 +18,7 @@
 #include <sys/socket.h>
 
 #define IFSZ 16
-#define PCAP_SAVEFILE "./pcap_savefile"
+#define PCAP_SAVEFILE "./pcap_savefile.pcap"
 
 extern char *inet_ntoa();
 
@@ -47,7 +47,7 @@ main(int argc, char **argv) {
     /*
      * For this program, the interface name must be passed to it on the
      * command line. The savefile name may be optionally passed in
-     * as well. If no savefile name is passed in, "./pcap_savefile" is
+     * as well. If no savefile name is passed in, "./pcap_savefile.pcap" is
      * used. If there are no arguments, the program has been invoked
      * incorrectly.
      */
