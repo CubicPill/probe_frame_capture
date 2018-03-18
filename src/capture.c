@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include<errno.h>
@@ -17,6 +18,10 @@ int sock;
 char whitelist_mac[18];
 
 int main(int argc, char *const argv[]) {
+    if (argc == 2 && strcmp(argv[1], "list") == 0) {
+        list_interfaces();
+        exit(0);
+    }
     memset(whitelist_mac, 0, 18);
     if (argc < 4) {
         fprintf(stderr, "No interface, server address or port specified!\n");
@@ -60,6 +65,36 @@ int main(int argc, char *const argv[]) {
     return 0;
 }
 
+void list_interfaces() {
+    pcap_if_t *alldevs;
+    pcap_if_t *d;
+    int i = 0;
+    char errbuf[PCAP_ERRBUF_SIZE];
+
+    if (pcap_findalldevs(&alldevs, errbuf) == -1) {
+        fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
+        exit(1);
+    }
+
+    for (d = alldevs; d; d = d->next) {
+        printf("%s", d->name);
+        if (d->description) {
+            printf(" (%s)\n", d->description);
+        } else {
+            printf(" (No description available)\n");
+        }
+        i++;
+    }
+
+    if (i == 0) {
+        printf("No interfaces found!\n");
+    }
+
+
+    pcap_freealldevs(alldevs);
+
+}
+
 int format_mac(const unsigned char *mac, char *result) {
     for (int i = 0; i < 6; ++i) {
         sprintf(result + 3 * i, "%02X-", mac[i]);
@@ -70,7 +105,8 @@ int format_mac(const unsigned char *mac, char *result) {
 
 
 int filter_802_11_probe_frame(const u_char *data) {
-    u_char frame_control = data[0x20];
+    uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
+    u_char frame_control = data[radiotap_len];
     if ((frame_control >> 2) == 0x10) {
         // it's 010000xx in binary, type=0x0, subtype=0x4
         return 1;
@@ -79,8 +115,9 @@ int filter_802_11_probe_frame(const u_char *data) {
 }
 
 int parse_frame(const u_char *data, struct frame_info *f) {
-    memcpy(f->src_mac, data + 0x2a, 6);
-    memcpy(f->dst_mac, data + 0x24, 6);
+    uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
+    memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
+    memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
     f->ssi_signal_dBm = (signed char) -(~(data[0x16] - data[0x17]) + 1);
     return 1;
 }

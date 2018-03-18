@@ -7,3 +7,4 @@ include_directories(./src/headers)
 
 link_libraries(pcap)
 add_executable(probe_frame_capture src/capture.c)
+add_executable(dump_frames src/dump.c)
