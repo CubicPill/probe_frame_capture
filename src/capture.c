@@ -1,6 +1,7 @@
 #include "capture.h"
+#include "pcap.h"
+#include "radiotap_iter.h"
 
-#include <pcap.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -166,6 +167,7 @@ int format_mac(const unsigned char *mac, char *result) {
 
 
 int filter_802_11_probe_frame(const u_char *data) {
+    //TODO: Use bpf to filter package rather than using this.
     uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
     u_char frame_control = data[radiotap_len];
     if ((frame_control >> 2) == 0x10) {
@@ -175,12 +177,26 @@ int filter_802_11_probe_frame(const u_char *data) {
     return 0;
 }
 
-int parse_frame(const u_char *data, struct frame_info *f) {
+int parse_frame(const u_char *data, size_t len, struct frame_info *f) {
+    struct ieee80211_radiotap_iterator iter;
+    int err = 0;
+    err = ieee80211_radiotap_iterator_init(&iter, (struct ieee80211_radiotap_header *) data, len, NULL);
+    if (err) {
+        return 0;
+    }
+    while (!(err = ieee80211_radiotap_iterator_next(&iter))) {
+        if (iter.is_radiotap_ns) {
+            if (iter.this_arg_index == IEEE80211_RADIOTAP_DBM_ANTSIGNAL) {
+                f->ssi_signal_dBm = *(signed char *) iter.this_arg;
+            }
+        }
+
+    }
     uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
     memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
     memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
-    f->ssi_signal_dBm = (signed char) -(~(data[0x16] - data[0x17]) + 1);
     //FIXME: This is hard coded, should read the list of flags and determine where is ssi signal
+    //TODO: ^^^ Fixed but untested
     return 1;
 }
 
@@ -192,8 +208,13 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
 
     struct frame_info f;
+    memset(&f, 0, sizeof(f));
     time(&f.timestamp);
-    parse_frame(pkt_data, &f);
+
+    if (!parse_frame(pkt_data, header->len, &f)) {
+        fprintf(stderr, "Error parsing frame. Corrupted?");
+        return;
+    }
     char dst_mac[18];
 
     char src_mac[18];

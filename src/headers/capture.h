@@ -25,7 +25,7 @@ typedef struct global_args {
 
 void parse_args(int argc, char **argv, struct global_args *args);
 
-int parse_frame(const u_char *data, struct frame_info *f);
+int parse_frame(const u_char *data, size_t len, struct frame_info *f);
 
 int filter_802_11_probe_frame(const u_char *data);
 
