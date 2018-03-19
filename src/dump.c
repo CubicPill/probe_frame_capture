@@ -27,8 +27,7 @@ int usage(char *progname) {
     exit(11);
 }
 
-int
-main(int argc, char **argv) {
+int main(int argc, char **argv) {
     pcap_t *p;               /* packet capture descriptor */
     struct pcap_stat ps;     /* packet statistics */
     pcap_dumper_t *pd;       /* pointer to the dump file */

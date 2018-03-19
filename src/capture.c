@@ -1,68 +1,116 @@
-#include <pcap.h>
 #include "capture.h"
 
-#include<sys/types.h>
+#include <pcap.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <netdb.h>
 #include <stdio.h>
 #include <time.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
-#include<errno.h>
+#include <errno.h>
+#include <getopt.h>
 
 struct sockaddr_in server_addr;
 int sock;
-char whitelist_mac[18];
+struct global_args args;
 
-int main(int argc, char *const argv[]) {
-    if (argc == 2 && strcmp(argv[1], "list") == 0) {
+int main(int argc, char **argv) {
+    memset(&args, 0, sizeof(args));
+
+    parse_args(argc, argv, &args);
+    if (args.list_all) {
         list_interfaces();
         exit(0);
+    } else if (strlen(args.interface) == 0) {
+        fprintf(stderr, "No interface specified!\n");
+        print_usage_and_exit(argv[0]);
     }
-    memset(whitelist_mac, 0, 18);
-    if (argc < 4) {
-        fprintf(stderr, "No interface, server address or port specified!\n");
-        printf("Usage: %s <interface name> <server> <port> <(Optional) MAC>\n", argv[0]);
-        exit(1);
-    }
-    if (argc == 5) {
-        if (strlen(whitelist_mac) != 17) {
-            printf("Invalid MAC %s, whitelist will not be enabled\n", argv[4]);
-        } else {
-            strncpy(whitelist_mac, argv[4], 18);
+    if (args.send_to_server) {
+        if (!args.has_port) {
+            fprintf(stderr, "No port specified!\n");
+            print_usage_and_exit(argv[0]);
         }
-    }
-    char *interface = argv[1];
-    char *ip = argv[2];
-    char *port = argv[3];
 
-    sock = socket(AF_INET, SOCK_DGRAM, 0);
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons((unsigned short) strtol(port, NULL, 10));
-    if (inet_pton(AF_INET, ip, &server_addr.sin_addr) <= 0) {
-        printf("inet_pton error for %s\n", ip);
-        exit(1);
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        memset(&server_addr, 0, sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_port = htons(args.port);
+        if (inet_pton(AF_INET, args.server_addr, &server_addr.sin_addr) == -1) { /*not ip*/
+            struct hostent *r;
+            if ((r = gethostbyname(args.server_addr)) == NULL) { /*hostname not found*/
+                fprintf(stderr, "Error: Can't find %s\n", args.server_addr);
+                exit(1);
+            } else {
+                server_addr.sin_addr = *((struct in_addr *) r->h_addr);
+            }
+        }
+
     }
+    
 
     pcap_t *adhandle;
     char errbuf[PCAP_ERRBUF_SIZE];
 
 
-    if ((adhandle = pcap_open_live(interface, 65536, 1, 1000, errbuf)) == NULL) {
-        fprintf(stderr, "Unable to open the adapter %s \n", interface);
+    if ((adhandle = pcap_open_live(args.interface, 65536, 1, 1000, errbuf)) == NULL) {
+        fprintf(stderr, "Unable to open the adapter %s \n", args.
+                interface);
         return -1;
     }
 
-    printf("\nListening on %s...\n\n", interface);
+    printf("\nListening on %s...\n\n", args.
+            interface);
 
     pcap_loop(adhandle, 0, packet_handler, NULL);
 
     pcap_close(adhandle);
     return 0;
+}
+
+void print_usage_and_exit(const char *progname) {
+    printf("Usage: %s <interface name>\n"
+                   "Optional arguments:\n"
+                   "-s <server>\n"
+                   "-p <port>\n"
+                   "--filter <MAC address>\n", progname);
+    exit(1);
+}
+
+void parse_args(int argc, char **argv, struct global_args *args) {
+    if (argc == 1) {
+        print_usage_and_exit(argv[0]);
+    } else if (argc == 2) {
+        if (strncmp(argv[1], "list", 4) == 0) {
+            args->list_all = 1;
+        } else { /*interface*/
+            strncpy(args->
+                    interface, argv[1], 15);
+        }
+
+    } else {
+        strncpy(args->
+                interface, argv[1], 15);
+        for (int i = 2; i < argc; ++i) {
+            if (strncmp(argv[i], "-p", 2) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
+                args->port = (uint16_t) strtol(argv[i + 1], NULL, 10);
+                args->has_port = 1;
+                ++i;
+            } else if (strncmp(argv[i], "-s", 2) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
+                strncpy(args->server_addr, argv[i + 1], 63);
+                args->send_to_server = 1;
+                ++i;
+            } else if (strncmp(argv[i], "--filter", 8) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
+                strncpy(args->whitelist_mac, argv[i + 1], 17);
+                args->filter_mac = 1;
+                ++i;
+            }
+        }
+    }
 }
 
 void list_interfaces() {
@@ -137,8 +185,8 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
 
     char src_mac[18];
     format_mac(f.src_mac, src_mac);
-    if (strlen(whitelist_mac) == 17) {
-        if (strcmp(src_mac, whitelist_mac) != 0) {
+    if (args.filter_mac) {
+        if (strcmp(src_mac, args.whitelist_mac) != 0) {
             printf("Packet from %s, filtered\n", src_mac);
             return;
         }
@@ -148,8 +196,9 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     char send_buffer[1024];
     memset(send_buffer, 0, 1024);
     sprintf(send_buffer, "ts:%ld\nsrc:%s\ndst:%s\nsignal:%d", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
-    sendto(sock, send_buffer, strlen(send_buffer), 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
-
+    if (args.send_to_server) {
+        sendto(sock, send_buffer, strlen(send_buffer), 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
+    }
 
 }
 

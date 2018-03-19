@@ -6,5 +6,5 @@ set(CMAKE_C_STANDARD 11)
 include_directories(./src/headers)
 
 link_libraries(pcap)
-add_executable(probe_frame_capture src/capture.c)
+add_executable(probe_frame_capture src/headers/capture.h src/capture.c)
 add_executable(dump_frames src/dump.c)
