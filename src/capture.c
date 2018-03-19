@@ -13,7 +13,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#include <getopt.h>
 
 struct sockaddr_in server_addr;
 int sock;
@@ -51,7 +50,21 @@ int main(int argc, char **argv) {
         }
 
     }
-    
+
+    printf("Running configurations:\n"
+                   "Listen on: %s\n"
+                   "Remote logging: ", args.interface);
+    if (args.send_to_server) {
+        printf("Yes, to %s:%d\n", args.server_addr, args.port);
+    } else {
+        printf("No\n");
+    }
+    printf("MAC filter: ");
+    if (args.filter_mac) {
+        printf("Yes, accept %s only\n", args.whitelist_mac);
+    } else {
+        printf("No\n");
+    }
 
     pcap_t *adhandle;
     char errbuf[PCAP_ERRBUF_SIZE];
