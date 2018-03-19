@@ -4,7 +4,11 @@ set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_C_STANDARD 11)
 
 include_directories(./src/headers)
-
+include_directories(./libpcap-1.8.1)
+include_directories(./radiotap-library)
+add_subdirectory(./libpcap-1.8.1)
+add_subdirectory(./radiotap-library)
 link_libraries(pcap)
+link_libraries(radiotap)
 add_executable(probe_frame_capture src/headers/capture.h src/capture.c)
 add_executable(dump_frames src/dump.c)

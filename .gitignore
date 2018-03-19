@@ -1,2 +1,9 @@
+*.o
+*.so
+CMakeCache.txt
+CMakeFiles
+libpcap-1.8.1/CMakeFiles
+radiotap-library/CMakeFiles
+cmake_install.cmake
 bin
 
