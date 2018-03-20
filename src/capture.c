@@ -239,6 +239,7 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     memset(send_buffer, 0, 1024);
     sprintf(send_buffer, "ts:%ld\nsrc:%s\ndst:%s\nsignal:%d", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
     if (args.send_to_server) {
+        // TODO: add encryption
         sendto(sock, send_buffer, strlen(send_buffer), 0, (struct sockaddr *) &server_addr, sizeof(server_addr));
     }
 
