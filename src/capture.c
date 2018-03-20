@@ -14,15 +14,20 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 struct sockaddr_in server_addr;
 int sock;
 struct global_args args;
+char *const filter_string = "wlan[0] >> 2 = 0x10";
+char errbuf[PCAP_ERRBUF_SIZE];
 
 int main(int argc, char **argv) {
     memset(&args, 0, sizeof(args));
+    memset(errbuf, 0, PCAP_ERRBUF_SIZE);
 
     parse_args(argc, argv, &args);
+
     if (args.list_all) {
         list_interfaces();
         exit(0);
@@ -66,15 +71,23 @@ int main(int argc, char **argv) {
     } else {
         printf("No\n");
     }
-
+    struct bpf_program filter;
+    memset(&filter, 0, sizeof(filter));
     pcap_t *adhandle;
-    char errbuf[PCAP_ERRBUF_SIZE];
 
 
     if ((adhandle = pcap_open_live(args.interface, 65536, 1, 1000, errbuf)) == NULL) {
-        fprintf(stderr, "Unable to open the adapter %s \n", args.
-                interface);
-        return -1;
+        fprintf(stderr, "Unable to open the adapter %s: %s\n", args.interface, errbuf);
+        return 1;
+    }
+
+    if (pcap_compile(adhandle, &filter, filter_string, 1, PCAP_NETMASK_UNKNOWN) == -1) {
+        pcap_perror(adhandle, "pcap_compile error: ");
+        return 1;
+    }
+    if (pcap_setfilter(adhandle, &filter) == -1) {
+        pcap_perror(adhandle, "pcap_setfilter error: ");
+        return 1;
     }
 
     printf("\nListening on %s...\n\n", args.
@@ -131,7 +144,6 @@ void list_interfaces() {
     pcap_if_t *alldevs;
     pcap_if_t *d;
     int i = 0;
-    char errbuf[PCAP_ERRBUF_SIZE];
 
     if (pcap_findalldevs(&alldevs, errbuf) == -1) {
         fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
@@ -167,7 +179,7 @@ int format_mac(const unsigned char *mac, char *result) {
 
 
 int filter_802_11_probe_frame(const u_char *data) {
-    //TODO: Use bpf to filter package rather than using this.
+    // only used for testing
     uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
     u_char frame_control = data[radiotap_len];
     if ((frame_control >> 2) == 0x10) {
@@ -195,17 +207,12 @@ int parse_frame(const u_char *data, size_t len, struct frame_info *f) {
     uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
     memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
     memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
-    //FIXME: This is hard coded, should read the list of flags and determine where is ssi signal
-    //TODO: ^^^ Fixed but untested
     return 1;
 }
 
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
-    if (!filter_802_11_probe_frame(pkt_data)) {
-        return;
-    }
-
+    assert(filter_802_11_probe_frame(pkt_data));
 
     struct frame_info f;
     memset(&f, 0, sizeof(f));
@@ -215,10 +222,11 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
         fprintf(stderr, "Error parsing frame. Corrupted?");
         return;
     }
-    char dst_mac[18];
 
+    char dst_mac[18];
     char src_mac[18];
     format_mac(f.src_mac, src_mac);
+
     if (args.filter_mac) {
         if (strcmp(src_mac, args.whitelist_mac) != 0) {
             printf("Packet from %s, filtered\n", src_mac);
