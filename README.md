@@ -13,7 +13,12 @@ cd bin
 cmake ..
 make -j4
 ```
-Then you'll get two executables, and ```libpcap.so```, ```libradiotap.so```
+Some files in this repo may have incorrect permissions (like .sh files which have no execute permission). You can fix this by manually add the permissions.
+```shell
+chmod +x <filename>
+```
+Then you'll get two executables, and ```libpcap.so```, ```libradiotap.so```     
+If you need to put the dynamic libraries to other folders, remember to set the ```LD_LIBRARY_PATH``` environment variable.
 
 ### Cross compiling
 First, you need to setup the toolchain for cross compiling.    
@@ -40,10 +45,12 @@ cmake CMakeList.txt -DCMAKE_TOOLCHAIN_FILE=linux_x86_64.cmake #Linux-x86_64
 ```
 ## Usage
 ```
-./probe_frame_capture list //list all interfaces avaliable
-./probe_frame_capture <interface name> 
-Optional:
--s <server>
--p <port>
---filter <MAC address>
+./probe_frame_capture <interface name>
+Optional arguments:
+-s <server>                Remote server
+-p <port>                  Port
+-q                         Quiet mode (disable stdout)
+-d <file>                  Dump packets to file
+--filter <MAC address>     Only collect given MAC's packet
+
 ```
