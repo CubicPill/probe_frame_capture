@@ -65,12 +65,28 @@ int main(int argc, char **argv) {
     } else {
         printf("No\n");
     }
+    printf("Print to stdout: ");
+    if (args.disable_stdout) {
+        printf("No\n");
+    } else {
+        printf("Yes\n");
+    }
+    printf("Dump packets to file: ");
+    if (args.to_file) {
+        printf("Yes, to %s \n", args.dump_file_name);
+    } else {
+        printf("No\n");
+    }
     printf("MAC filter: ");
     if (args.filter_mac) {
         printf("Yes, accept %s only\n", args.whitelist_mac);
     } else {
         printf("No\n");
     }
+    if (args.disable_stdout && !args.send_to_server && !args.to_file) {
+        fprintf(stderr, "\nWARNING: None of stdout, remote server or dump file is enabled, why are you doing this?\n");
+    }
+
     struct bpf_program filter;
     memset(&filter, 0, sizeof(filter));
     pcap_t *adhandle;
@@ -89,11 +105,20 @@ int main(int argc, char **argv) {
         pcap_perror(adhandle, "pcap_setfilter error: ");
         return 1;
     }
+    pcap_dumper_t *dumpfile = NULL;
+    if (args.to_file) {
+        dumpfile = pcap_dump_open(adhandle, args.dump_file_name);
+        if (dumpfile == NULL) {
+            fprintf(stderr, "\nError opening output file\n");
+            return 1;
+        }
+    }
+
 
     printf("\nListening on %s...\n\n", args.
             interface);
 
-    pcap_loop(adhandle, 0, packet_handler, NULL);
+    pcap_loop(adhandle, 0, packet_handler, (u_char *) dumpfile);
 
     pcap_close(adhandle);
     return 0;
@@ -102,9 +127,11 @@ int main(int argc, char **argv) {
 void print_usage_and_exit(const char *progname) {
     printf("Usage: %s <interface name>\n"
                    "Optional arguments:\n"
-                   "-s <server>\n"
-                   "-p <port>\n"
-                   "--filter <MAC address>\n", progname);
+                   "-s <server>                Remote server\n"
+                   "-p <port>                  Port\n"
+                   "-q                         Quiet mode (disable stdout)\n"
+                   "-d <file>                  Dump packets to file\n"
+                   "--filter <MAC address>     Only collect given MAC's packet\n", progname);
     exit(1);
 }
 
@@ -115,13 +142,11 @@ void parse_args(int argc, char **argv, struct global_args *args) {
         if (strncmp(argv[1], "list", 4) == 0) {
             args->list_all = 1;
         } else { /*interface*/
-            strncpy(args->
-                    interface, argv[1], 15);
+            strncpy(args->interface, argv[1], 15);
         }
 
     } else {
-        strncpy(args->
-                interface, argv[1], 15);
+        strncpy(args->interface, argv[1], 15);
         for (int i = 2; i < argc; ++i) {
             if (strncmp(argv[i], "-p", 2) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
                 args->port = (uint16_t) strtol(argv[i + 1], NULL, 10);
@@ -134,6 +159,12 @@ void parse_args(int argc, char **argv, struct global_args *args) {
             } else if (strncmp(argv[i], "--filter", 8) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
                 strncpy(args->whitelist_mac, argv[i + 1], 17);
                 args->filter_mac = 1;
+                ++i;
+            } else if (strncmp(argv[i], "-q", 2) == 0) {
+                args->disable_stdout = 1;
+            } else if (strncmp(argv[i], "-d", 2) == 0 && i + 1 < argc && argv[i + 1][0] != '-') {
+                strncpy(args->dump_file_name, argv[i + 1], 127);
+                args->to_file = 1;
                 ++i;
             }
         }
@@ -192,26 +223,31 @@ int filter_802_11_probe_frame(const u_char *data) {
 int parse_frame(const u_char *data, size_t len, struct frame_info *f) {
     struct ieee80211_radiotap_iterator iter;
     int err = 0;
+    uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
+    memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
+    memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
+
     err = ieee80211_radiotap_iterator_init(&iter, (struct ieee80211_radiotap_header *) data, len, NULL);
     if (err) {
         return 0;
     }
     while (!(err = ieee80211_radiotap_iterator_next(&iter))) {
         if (iter.is_radiotap_ns) {
-            if (iter.this_arg_index == IEEE80211_RADIOTAP_DBM_ANTSIGNAL) {
+            if (iter.this_arg_index == IEEE80211_RADIOTAP_DBM_ANTSIGNAL && !f->ssi_signal_dBm) {
                 f->ssi_signal_dBm = *(signed char *) iter.this_arg;
             }
         }
 
     }
-    uint16_t radiotap_len = (data[0x3] << 8) | data[0x2];
-    memcpy(f->src_mac, data + radiotap_len + 0xa, 6);
-    memcpy(f->dst_mac, data + radiotap_len + 0x4, 6);
+
     return 1;
 }
 
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
+    if (args.to_file) {
+        pcap_dump(param, header, pkt_data);
+    }
     assert(filter_802_11_probe_frame(pkt_data));
 
     struct frame_info f;
@@ -228,13 +264,15 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     format_mac(f.src_mac, src_mac);
 
     if (args.filter_mac) {
-        if (strcmp(src_mac, args.whitelist_mac) != 0) {
+        if (strcmp(src_mac, args.whitelist_mac) != 0 && !args.disable_stdout) {
             printf("Packet from %s, filtered\n", src_mac);
             return;
         }
     }
     format_mac(f.dst_mac, dst_mac);
-    printf("Timestamp:%ld\nSrc:%s\nDst:%s\nSignal:%ddBm\n\n", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
+    if (!args.disable_stdout) {
+        printf("Timestamp:%ld\nSrc:%s\nDst:%s\nSignal:%ddBm\n\n", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);
+    }
     char send_buffer[1024];
     memset(send_buffer, 0, 1024);
     sprintf(send_buffer, "ts:%ld\nsrc:%s\ndst:%s\nsignal:%d", f.timestamp, src_mac, dst_mac, f.ssi_signal_dBm);

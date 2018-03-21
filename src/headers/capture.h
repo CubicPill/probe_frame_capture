@@ -16,6 +16,9 @@ typedef struct global_args {
     uint8_t list_all;
     char interface[16];
     uint8_t send_to_server;
+    uint8_t disable_stdout;
+    uint8_t to_file;
+    char dump_file_name[128];
     char server_addr[64];
     uint8_t has_port;
     uint16_t port;
