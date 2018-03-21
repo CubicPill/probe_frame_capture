@@ -1,5 +1,4 @@
 *.o
-*.so
 CMakeCache.txt
 CMakeFiles
 libpcap-1.8.1/CMakeFiles
