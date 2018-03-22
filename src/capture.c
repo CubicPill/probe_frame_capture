@@ -245,9 +245,7 @@ int parse_frame(const u_char *data, size_t len, struct frame_info *f) {
 
 
 void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_char *pkt_data) {
-    if (args.to_file) {
-        pcap_dump(param, header, pkt_data);
-    }
+
     assert(filter_802_11_probe_frame(pkt_data));
 
     struct frame_info f;
@@ -264,9 +262,11 @@ void packet_handler(u_char *param, const struct pcap_pkthdr *header, const u_cha
     format_mac(f.src_mac, src_mac);
 
     if (args.filter_mac) {
-        if (strcmp(src_mac, args.whitelist_mac) != 0 && !args.disable_stdout) {
-            printf("Packet from %s, filtered\n", src_mac);
+        if (strcmp(src_mac, args.whitelist_mac) != 0) {
             return;
+        }
+        if (args.to_file) {
+            pcap_dump(param, header, pkt_data);
         }
     }
     format_mac(f.dst_mac, dst_mac);
