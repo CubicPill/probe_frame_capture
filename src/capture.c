@@ -45,15 +45,8 @@ int main(int argc, char **argv) {
         memset(&server_addr, 0, sizeof(server_addr));
         server_addr.sin_family = AF_INET;
         server_addr.sin_port = htons(args.port);
-        if (inet_pton(AF_INET, args.server_addr, &server_addr.sin_addr) == -1) { /*not ip*/
-            struct hostent *r;
-            if ((r = gethostbyname(args.server_addr)) == NULL) { /*hostname not found*/
-                fprintf(stderr, "Error: Can't find %s\n", args.server_addr);
-                exit(1);
-            } else {
-                server_addr.sin_addr = *((struct in_addr *) r->h_addr);
-            }
-        }
+        server_addr.sin_addr.s_addr = inet_addr(args.server_addr);
+
 
     }
 
@@ -89,7 +82,7 @@ int main(int argc, char **argv) {
 
     struct bpf_program filter;
     memset(&filter, 0, sizeof(filter));
-    pcap_t *adhandle;
+    pcap_t *adhandle = NULL;
 
 
     if ((adhandle = pcap_open_live(args.interface, 65536, 1, 1000, errbuf)) == NULL) {
@@ -126,6 +119,7 @@ int main(int argc, char **argv) {
 
 void print_usage_and_exit(const char *progname) {
     printf("Usage: %s <interface name>\n"
+                   "use `list` to list all interfaces"
                    "Optional arguments:\n"
                    "-s <server>                Remote server\n"
                    "-p <port>                  Port\n"
@@ -172,13 +166,15 @@ void parse_args(int argc, char **argv, struct global_args *args) {
 }
 
 void list_interfaces() {
-    pcap_if_t *alldevs;
+    pcap_if_t *alldevs = NULL;
     pcap_if_t *d;
     int i = 0;
 
     if (pcap_findalldevs(&alldevs, errbuf) == -1) {
         fprintf(stderr, "Error in pcap_findalldevs: %s\n", errbuf);
-        exit(1);
+        if (alldevs == NULL) {
+            exit(1);
+        }
     }
 
     for (d = alldevs; d; d = d->next) {
